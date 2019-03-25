@@ -56,6 +56,9 @@ library(varhandle)
 library(scales)
 library(reshape)
 library(plyr)
+library(RColorBrewer)
+library(tidyverse)
+library(xtable)
 
 #---------------------------------------
 # Set environment variables if any
@@ -219,69 +222,6 @@ write.csv(coding_candidate_cancer_drivers_no_mutations,
 write.csv(noncoding_candidate_cancer_drivers,
           paste(outDir, "/noncoding_candidate_cancer_drivers.csv", sep = ""), row.names = FALSE)
 
-#================================================================
-# Validation
-#================================================================
-# Load the gold standard, CGC
-gold_standard = read.table(
-  file = paste(rootDir, "/Data/Census_allFri Sep 28 07_39_37 2018.tsv", sep = ""),
-  sep = '\t', header = TRUE)
-gold_standard <- gold_standard[, 1]
-gold_standard <- as.character(gold_standard)
-
-# DawnRank
-DawnRankDriver = read.table(
-  file = paste(rootDir, "/DawnRank/DawnRank-drivers.txt", sep = ""),
-  sep = '\t', header = F)
-DawnRankDriver_Sorted <- DawnRankDriver[order(DawnRankDriver$V2, decreasing = T),]
-DawnRankDriver_Top50 <- DawnRankDriver_Sorted[1:50,]
-DawnRankDriver_Top100 <- DawnRankDriver_Sorted[1:100,]
-DawnRankDriver_Top150 <- DawnRankDriver_Sorted[1:150,]
-DawnRankDriver_Top200 <- DawnRankDriver_Sorted[1:200,]
-DawnRankDriver_Top50_Validated <- intersect(DawnRankDriver_Top50[, 1], gold_standard)
-DawnRankDriver_Top100_Validated <- intersect(DawnRankDriver_Top100[, 1], gold_standard)
-DawnRankDriver_Top150_Validated <- intersect(DawnRankDriver_Top150[, 1], gold_standard)
-DawnRankDriver_Top200_Validated <- intersect(DawnRankDriver_Top200[, 1], gold_standard)
-
-# IntOGen
-# Load result file
-IntOGenResult = read.table(
-  file = paste(rootDir, "/OncodriveCLUST_OncodriveFM/2018-09-24_intogen/gene.tsv", sep = ""),
-  sep = '\t', header = TRUE)
-
-# OncodriveCLUST
-OncodriveCLUST_Sorted <- IntOGenResult[order(IntOGenResult$QVALUE_ONCODRIVECLUST, decreasing = F),]
-OncodriveCLUST_Top50 <- OncodriveCLUST_Sorted[1:50,]
-OncodriveCLUST_Top100 <- OncodriveCLUST_Sorted[1:100,]
-OncodriveCLUST_Top150 <- OncodriveCLUST_Sorted[1:150,]
-OncodriveCLUST_Top200 <- OncodriveCLUST_Sorted[1:200,]
-OncodriveCLUST_Top50_Validated <- intersect(OncodriveCLUST_Top50[, "SYMBOL"], gold_standard)
-OncodriveCLUST_Top100_Validated <- intersect(OncodriveCLUST_Top100[, "SYMBOL"], gold_standard)
-OncodriveCLUST_Top150_Validated <- intersect(OncodriveCLUST_Top150[, "SYMBOL"], gold_standard)
-OncodriveCLUST_Top200_Validated <- intersect(OncodriveCLUST_Top200[, "SYMBOL"], gold_standard)
-
-# OncodriveFM
-OncodriveFM_Sorted <- IntOGenResult[order(IntOGenResult$QVALUE_ONCODRIVEFM, decreasing = F),]
-OncodriveFM_Top50 <- OncodriveFM_Sorted[1:50,]
-OncodriveFM_Top100 <- OncodriveFM_Sorted[1:100,]
-OncodriveFM_Top150 <- OncodriveFM_Sorted[1:150,]
-OncodriveFM_Top200 <- OncodriveFM_Sorted[1:200,]
-OncodriveFM_Top50_Validated <- intersect(OncodriveFM_Top50[, "SYMBOL"], gold_standard)
-OncodriveFM_Top100_Validated <- intersect(OncodriveFM_Top100[, "SYMBOL"], gold_standard)
-OncodriveFM_Top150_Validated <- intersect(OncodriveFM_Top150[, "SYMBOL"], gold_standard)
-OncodriveFM_Top200_Validated <- intersect(OncodriveFM_Top200[, "SYMBOL"], gold_standard)
-
-# New method - CBNA
-coding_candidate_cancer_drivers = read.csv(
-  file = paste(outDir, "/coding_candidate_cancer_drivers_mutations.csv", sep = ""))
-CBNA_Top50 <- coding_candidate_cancer_drivers[1:50,]
-CBNA_Top100 <- coding_candidate_cancer_drivers[1:100,]
-CBNA_Top150 <- coding_candidate_cancer_drivers[1:150,]
-CBNA_Top200 <- coding_candidate_cancer_drivers[1:200,]
-CBNA_Top50_Validated <- intersect(CBNA_Top50[, "Name"], gold_standard)
-CBNA_Top100_Validated <- intersect(CBNA_Top100[, "Name"], gold_standard)
-CBNA_Top150_Validated <- intersect(CBNA_Top150[, "Name"], gold_standard)
-CBNA_Top200_Validated <- intersect(CBNA_Top200[, "Name"], gold_standard)
 ```
 
 ## 2. Identifying drivers in different conditions
@@ -495,28 +435,6 @@ write.csv(coding_candidate_cancer_drivers_no_mutations,
 write.csv(noncoding_candidate_cancer_drivers,
           paste(outDir, "/noncoding_candidate_cancer_drivers.csv", sep = ""), row.names = FALSE)
 
-#================================================================
-# Validation
-#================================================================
-# Load the gold standard, CGC
-gold_standard = read.table(
-  file = paste(rootDir, "/Data/Census_allFri Sep 28 07_39_37 2018.tsv", sep = ""),
-  sep = '\t', header = TRUE)
-gold_standard <- gold_standard[, 1]
-gold_standard <- as.character(gold_standard)
-
-# New method - CBNA
-coding_candidate_cancer_drivers_mutations = read.csv(
-  file = paste(outDir, "/coding_candidate_cancer_drivers_mutations.csv", sep = ""))
-CBNA_Validated <- intersect(coding_candidate_cancer_drivers_mutations[, "Name"], gold_standard)
-
-# Calculate p_value
-n_A = nrow(coding_candidate_cancer_drivers_mutations) # number of estimated cancer drivers
-n_B = length(gold_standard) # number of confirmed cancer drivers
-n_C = 839+5168 # number of genes
-n_A_B = length(CBNA_Validated) # number of cancer drivers validated
-p_value <- 1 - phyper(n_A_B, n_B, n_C-n_B, n_A)
-print(paste("p_value: ", p_value, sep = ""))
 ```
 
 ## 3. Detecting drivers of cancer subtypes
@@ -820,125 +738,6 @@ write.csv(coding_candidate_cancer_drivers_no_mutations,
 write.csv(noncoding_candidate_cancer_drivers,
           paste(outDir, "/noncoding_candidate_cancer_drivers.csv", sep = ""), row.names = FALSE)
 
-#================================================================
-# Evaluation after running the above script for all subtypes
-#================================================================
-# Set constants
-resultDir <- paste(rootDir, "/Data/Output/CancerSubtype", sep = "") # Result folder
-Basal <- "Basal"
-Her2 <- "Her2"
-LumA <- "LumA"
-LumB <- "LumB"
-NormalLike <- "NormalLike"
-
-# Load the gold standard, CGC
-gold_standard = read.table(
-  file = paste(rootDir, "/Data/Census_allFri Sep 28 07_39_37 2018.tsv", sep = ""),
-  sep = '\t', header = TRUE)
-gold_standard <- gold_standard[, 1]
-gold_standard <- as.character(gold_standard)
-
-# Get results
-basalList <- readResult(resultDir, Basal)
-her2List <- readResult(resultDir, Her2)
-lumAList <- readResult(resultDir, LumA)
-lumBList <- readResult(resultDir, LumB)
-normalLikeList <- readResult(resultDir, NormalLike)
-
-# Coding with mutations
-print("Basal")
-print(getList(basalList$coding_mutations$Name[1:100]))
-print("Her2")
-print(getList(her2List$coding_mutations$Name[1:100]))
-print("LumA")
-print(getList(lumAList$coding_mutations$Name[1:100]))
-print("LumB")
-print(getList(lumBList$coding_mutations$Name[1:100]))
-print("Normal-like")
-print(getList(normalLikeList$coding_mutations$Name[1:100]))
-
-# Coding without mutations
-print("Basal")
-print(getList(basalList$coding_no_mutations$Name))
-print("Her2")
-print(getList(her2List$coding_no_mutations$Name))
-print("LumA")
-print(getList(lumAList$coding_no_mutations$Name))
-print("LumB")
-print(getList(lumBList$coding_no_mutations$Name))
-print("Normal-like")
-print(getList(normalLikeList$coding_no_mutations$Name))
-
-# Non-coding
-print("Basal")
-print(getList(basalList$noncoding$Name))
-print("Her2")
-print(getList(her2List$noncoding$Name))
-print("LumA")
-print(getList(lumAList$noncoding$Name))
-print("LumB")
-print(getList(lumBList$noncoding$Name))
-print("Normal-like")
-print(getList(normalLikeList$noncoding$Name))
-
-# Coding with mutations, validated
-Basal_Validated <- validateCGC(basalList, gold_standard)
-Her2_Validated <- validateCGC(her2List, gold_standard)
-LumA_Validated <- validateCGC(lumAList, gold_standard)
-LumB_Validated <- validateCGC(lumBList, gold_standard)
-NormalLike_Validated <- validateCGC(normalLikeList, gold_standard)
-
-# Get different drivers
-diff_coding_mutations <- findDiff(basalList$coding_mutations[1:100,], 
-                                  her2List$coding_mutations[1:100,],
-                                  lumAList$coding_mutations[1:100,], 
-                                  lumBList$coding_mutations[1:100,],
-                                  normalLikeList$coding_mutations[1:100,])
-diff_coding_no_mutations <- findDiff(basalList$coding_no_mutations, her2List$coding_no_mutations,
-                                  lumAList$coding_no_mutations, lumBList$coding_no_mutations,
-                                  normalLikeList$coding_no_mutations)
-diff_noncoding <- findDiff(basalList$noncoding, her2List$noncoding,
-                                  lumAList$noncoding, lumBList$noncoding,
-                                  normalLikeList$noncoding)
-
-# Print different drivers
-# Coding with mutations
-print("diff_coding_mutations")
-print("Basal")
-print(getList(diff_coding_mutations$basalDiff))
-print("Her2")
-print(getList(diff_coding_mutations$her2Diff))
-print("LumA")
-print(getList(diff_coding_mutations$lumADiff))
-print("LumB")
-print(getList(diff_coding_mutations$lumBDiff))
-print("Normal-like")
-print(getList(diff_coding_mutations$normalLikeDiff))
-# Coding without mutations
-print("diff_coding_no_mutations")
-print("Basal")
-print(getList(diff_coding_no_mutations$basalDiff))
-print("Her2")
-print(getList(diff_coding_no_mutations$her2Diff))
-print("LumA")
-print(getList(diff_coding_no_mutations$lumADiff))
-print("LumB")
-print(getList(diff_coding_no_mutations$lumBDiff))
-print("Normal-like")
-print(getList(diff_coding_no_mutations$normalLikeDiff))
-# Noncoding
-print("diff_noncoding")
-print("Basal")
-print(getList(diff_noncoding$basalDiff))
-print("Her2")
-print(getList(diff_noncoding$her2Diff))
-print("LumA")
-print(getList(diff_noncoding$lumADiff))
-print("LumB")
-print(getList(diff_noncoding$lumBDiff))
-print("Normal-like")
-print(getList(diff_noncoding$normalLikeDiff))
-
 ```
 
 ## 4. Detecting drivers of epithelial-mesenchymal transition (EMT)
@@ -1114,88 +913,4 @@ write.csv(coding_candidate_drivers,
 write.csv(noncoding_candidate_drivers,
           paste(outDir, "/noncoding_candidate_drivers.csv", sep = ""), row.names = FALSE)
 
-#================================================================
-# Validation after running the above script for EMT
-#================================================================
-# Load the gold standard
-# Coding
-coding_gold_standard = read.table(
-  file = paste(rootDir, "/Data/Generic_EMT_signature.csv", sep = ""),
-  sep = ',', header = FALSE, as.is = TRUE)
-coding_gold_standard_Mes <- coding_gold_standard[which(coding_gold_standard[,2]=="Mes"),]
-# coding_gold_standard_Epi <- coding_gold_standard[which(coding_gold_standard[,2]=="Epi"),]
-coding_gold_standard_Mes <- coding_gold_standard_Mes[,1]
-# coding_gold_standard_Epi <- coding_gold_standard_Epi[,1]
-# Noncoding
-noncoding_gold_standard = read.table(
-  file = paste(rootDir, "/Data/EMT_miRNAs.csv", sep = ""),
-  sep = ',', header = FALSE, as.is = TRUE)
-noncoding_gold_standard_Mes <- 
-  noncoding_gold_standard[which(noncoding_gold_standard[,2] %in% c("Pro-mesenchymal", "Both")),]
-# noncoding_gold_standard_Epi <- 
-#   noncoding_gold_standard[which(noncoding_gold_standard[,2] %in% c("Pro-epithelial", "Both")),]
-noncoding_gold_standard_Mes <- noncoding_gold_standard_Mes[,1]
-# noncoding_gold_standard_Epi <- noncoding_gold_standard_Epi[,1]
-noncoding_gold_standard_Mes <- processmiR(noncoding_gold_standard_Mes)
-# noncoding_gold_standard_Epi <- processmiR(noncoding_gold_standard_Epi)
-
-# New method - CBNA
-outDirMes <- paste(rootDir, "/Data/Output/EMT/Mes", sep = "")
-# outDirEpi <- paste(rootDir, "/Data/Output/EMT/Epi", sep = "")
-# Coding
-coding_candidate_drivers_Mes = read.csv(
-  file = paste(outDirMes, "/coding_candidate_drivers.csv", sep = ""))
-coding_candidate_drivers_Mes <- coding_candidate_drivers_Mes[
-  order(coding_candidate_drivers_Mes$K, decreasing = TRUE),]
-coding_candidate_drivers_Mes <- coding_candidate_drivers_Mes[1:100,]
-coding_candidate_drivers_Validated_Mes <- intersect(coding_candidate_drivers_Mes[, "Name"],
-                                                    coding_gold_standard_Mes)
-# coding_candidate_drivers_Epi = read.csv(
-#   file = paste(outDirEpi, "/coding_candidate_drivers.csv", sep = ""))
-# coding_candidate_drivers_Epi <- coding_candidate_drivers_Epi[
-#   order(coding_candidate_drivers_Epi$K, decreasing = TRUE),]
-# coding_candidate_drivers_Epi <- coding_candidate_drivers_Epi[1:100,]
-# coding_candidate_drivers_Validated_Epi <- intersect(coding_candidate_drivers_Epi[, "Name"],
-#                                                     coding_gold_standard_Epi)
-# Noncoding
-noncoding_candidate_drivers_Mes = read.csv(
-  file = paste(outDirMes, "/noncoding_candidate_drivers.csv", sep = ""))
-noncoding_candidate_drivers_Validated_Mes <- intersect(noncoding_candidate_drivers_Mes[, "Name"],
-                                                       noncoding_gold_standard_Mes)
-# noncoding_candidate_drivers_Epi = read.csv(
-#   file = paste(outDirEpi, "/noncoding_candidate_drivers.csv", sep = ""))
-# noncoding_candidate_drivers_Validated_Epi <- intersect(noncoding_candidate_drivers_Epi[, "Name"],
-#                                                        noncoding_gold_standard_Epi)
-
-# Calculate p_value
-# Coding
-# Mes
-n_A = nrow(coding_candidate_drivers_Mes) # number of estimated drivers
-n_B = length(coding_gold_standard_Mes) # number of signatures
-n_C = 839+5168 # number of genes
-n_A_B = length(coding_candidate_drivers_Validated_Mes) # number of drivers validated
-p_value <- 1 - phyper(n_A_B, n_B, n_C-n_B, n_A)
-print(paste("p_value for coding drivers of Mes: ", p_value, sep = ""))
-# Epi
-# n_A = nrow(coding_candidate_drivers_Epi) # number of estimated drivers
-# n_B = length(coding_gold_standard_Epi) # number of signatures
-# n_C = 839+5168 # number of genes
-# n_A_B = length(coding_candidate_drivers_Validated_Epi) # number of drivers validated
-# p_value <- 1 - phyper(n_A_B, n_B, n_C-n_B, n_A)
-# print(paste("p_value for coding drivers of Epi: ", p_value, sep = ""))
-# Noncoding
-# Mes
-n_A = nrow(noncoding_candidate_drivers_Mes) # number of estimated drivers
-n_B = length(noncoding_gold_standard_Mes) # number of signatures
-n_C = 1719 # number of miRNA
-n_A_B = length(noncoding_candidate_drivers_Validated_Mes) # number of drivers validated
-p_value <- 1 - phyper(n_A_B, n_B, n_C-n_B, n_A)
-print(paste("p_value for noncoding drivers of Mes: ", p_value, sep = ""))
-# Epi
-# n_A = nrow(noncoding_candidate_drivers_Epi) # number of estimated drivers
-# n_B = length(noncoding_gold_standard_Epi) # number of signatures
-# n_C = 1719 # number of miRNA
-# n_A_B = length(noncoding_candidate_drivers_Validated_Epi) # number of drivers validated
-# p_value <- 1 - phyper(n_A_B, n_B, n_C-n_B, n_A)
-# print(paste("p_value for noncoding drivers of Epi: ", p_value, sep = ""))
 ```

@@ -327,6 +327,31 @@ printGeneList = function(OncodriveCLUST, OncodriveFM,
 }
 
 #================================================================
+#' Print gene lists for finding overlaps among methods
+#' @param OncodriveCLUST A list of genes from OncodriveCLUST method
+#' @param ActiveDriver A list of genes from ActiveDriver method
+#' @param OncodriveFM A list of genes from OncodriveFM method
+#' @param DriverNet A list of genes from DriverNet method
+#' @param DawnRank A list of genes from DawnRank method
+#' @param CBNA A list of genes from CBNA method
+#================================================================
+printGeneList_6methods = function(OncodriveCLUST, ActiveDriver, OncodriveFM,
+                         DriverNet, DawnRank, CBNA) {
+  print("OncodriveCLUST")
+  print(getList(OncodriveCLUST))
+  print("ActiveDriver")
+  print(getList(ActiveDriver))
+  print("OncodriveFM")
+  print(getList(OncodriveFM))
+  print("DriverNet")
+  print(getList(DriverNet))
+  print("DawnRank")
+  print(getList(DawnRank))
+  print("CBNA")
+  print(getList(CBNA))  
+}
+
+#================================================================
 #' Process data by filtering out genes with constant expression values
 #' @param matchedData Matched expression data, rownames are samples and colnames are biological features
 #' @return Processed data
@@ -536,6 +561,79 @@ drawLineChart=function(OncodriveCLUSTData, OncodriveFMData, DawnRankData, CBNADa
 }
 
 #================================================================
+#' This function allows you to draw a line chart
+#' @param OncodriveCLUSTData the data for OncodriveCLUST.
+#' @param ActiveDriverData the data for ActiveDriver.
+#' @param OncodriveFMData the data for OncodriveFM.
+#' @param DriverNetData the data for DriverNet.
+#' @param DawnRankData the data for DawnRank.
+#' @param CBNAData the data for CBNA.
+#' @param Type it can be "Precision", "Recall", or "F1Score.
+#================================================================
+drawLineChart6=function(OncodriveCLUSTData, ActiveDriverData, OncodriveFMData, DriverNetData, DawnRankData, CBNAData, Type="Precision"){
+  # Parameters for each chart type
+  if(Type == "Precision") {
+    yText <- "Precision according to CGC"
+    t <- "Precision Comparison"
+    pos <- "topright"
+  } else if (Type == "Recall") {
+    yText <- "Recall according to CGC"
+    t <- "Recall Comparison"
+    pos <- "topleft"
+  } else { # "F1Score"
+    yText <- "F1 Score according to CGC"
+    t <- "F1 Score Comparison"
+    pos <- "topleft"
+  }
+  
+  # Prepare data
+  Method=c(rep("OncodriveCLUST", 200), rep("ActiveDriver", 200), rep("OncodriveFM", 200), rep("DriverNet", 200), rep("DawnRank", 200), rep("CBNA", 200))
+  TopNGenes=c(1:200, 1:200, 1:200, 1:200, 1:200, 1:200)
+  Val=c(OncodriveCLUSTData, ActiveDriverData, OncodriveFMData, DriverNetData, DawnRankData, CBNAData)
+  indexes<-seq(5,1200,5)
+  Method <- Method[indexes]
+  TopNGenes <- TopNGenes[indexes]
+  Val <- Val[indexes]
+  data <- list(Method=Method,
+               TopNGenes=TopNGenes,
+               Val=Val)
+  
+  # Convert to numeric for convenience 
+  data$Val <- as.numeric(data$Val)
+  
+  # Prepare some constants
+  methodList <- c("OncodriveCLUST", "ActiveDriver", "OncodriveFM", "DriverNet", "DawnRank", "CBNA")
+  nMethods <- length(methodList)
+  
+  # Get the range for the x and y axis 
+  xrange <- range(data$TopNGenes) 
+  yrange <- range(data$Val) 
+  
+  # Set up the plot 
+  plot(xrange, yrange, type="n", xlab="Top N genes",
+       ylab="", cex.lab=2, cex.axis=2)
+  title(ylab=yText, line=2.7, cex.lab=2)
+  colors <- rainbow(nMethods) 
+  linetype <- c(1:nMethods) 
+  plotchar <- seq(18, 18+nMethods, 1)
+  
+  # Add lines 
+  for (i in 1:nMethods) {
+    ind <- which(data$Method == methodList[i])
+    method <- list(Method=data$Method[ind], TopNGenes=data$TopNGenes[ind], Val=data$Val[ind])
+    lines(method$TopNGenes, method$Val, type="b", lwd=1.5,
+          lty=linetype[i], col=colors[i], pch=plotchar[i], cex=2) 
+  } 
+  
+  # Add a title 
+  title(t, cex.main=2.5)
+  
+  # Add a legend 
+  legend(pos, inset = 0.02, legend=methodList, cex=2, col=colors,
+         pch=plotchar, lty=linetype, title="Method", bty = "n")
+}
+
+#================================================================
 #' This function allows you to prepare data for a clustergram
 #' @param dat the data to draw.
 #' @param termTop the number of top terms to draw.
@@ -577,6 +675,7 @@ prepareDataForClustergram=function(dat, termTop = 10, geneTop  = 20){
 #================================================================
 #' This function allows you to draw a clustergram
 #' @param dat the data to draw.
+#' @param t title
 #================================================================
 drawClustergram=function(dat, t){
   d <- dat
