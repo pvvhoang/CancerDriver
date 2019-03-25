@@ -11,7 +11,7 @@ Vu VH Pham^1^, Lin Liu^1^, Cameron Bracken^2^, Greg Goodall^2^, Jiuyong Li^1^ an
 
 ^2^ Centre for Cancer Biology, SA Pathology, Adelaide, 5000, Australia.\newline \newline \newline
 
-This is the script to run methods other than the proposed method, including DawnRank, OncodriveCLUST, and OncodriveFM.
+This is the script to run methods other than the proposed method.
 
 ## 1. DawnRank
 
@@ -300,4 +300,318 @@ cat(paste("Number of cancer drivers in Top 150 validated: ",
           length(OncodriveFM_Top150_Validated), "\n", sep = ""))
 cat(paste("Number of cancer drivers in Top 200 validated: ", 
           length(OncodriveFM_Top200_Validated), "\n", sep = ""))
+
+#=======================================
+# Script for driver gene prediction consistency
+#=======================================
+
+# Functions if any
+#=======================================
+#' This function allows you to split a dataset into 2 sub sets randomly
+#' @param dat Input dataset.
+#' @param s Seed.
+#' @return A list containing 2 sub sets
+#=======================================
+splitDataset <- function(dat, s) {
+  set.seed(s)
+  ss <- sample(1:2,size=nrow(dat),replace=TRUE,prob=c(0.5,0.5))
+  dat1 <- dat[ss==1,]
+  dat2 <- dat[ss==2,]
+  r <- list(dat1 = dat1, dat2 = dat2)
+  return(r)
+}
+
+#--------------------------------
+
+# Read data
+load(paste(rootDir, "/Data/mut.RData", sep = ""))
+
+# Create input file
+inputData <- mut[, c("chromosome_name_WU", "start_WU", "stop_WU", "strand_WU",
+                     "reference_WU", "variant_WU", "Tumor_Sample_Barcode")]
+inputData[,5] <- paste(inputData[,5], inputData[,6], sep = ">")
+inputData <- inputData[,-6]
+
+# Create 10 repetitions of random two-way splits
+for (i in 1:10) {
+  res <- splitDataset(inputData, i)
+  write.table(res$dat1, file = paste(outDir, "/inputData", i,"_1.txt", sep = ""),
+            sep = "\t", quote = FALSE, row.names = FALSE, col.names = F)
+  write.table(res$dat2, file = paste(outDir, "/inputData", i,"_2.txt", sep = ""),
+            sep = "\t", quote = FALSE, row.names = FALSE, col.names = F)
+}
+
+#--------------------------------
+# Run the method in https://www.intogen.org/analysis/home
+# This is the information which has been used for the experiment:
+#   The input file: inputDatai_j.txt (i: from 1 to 10, j from 1 to 2)
+#   Analysis name: BRCA_20190313_i_j
+#   Genome assembly: hg19 (GRCh37)
+#   OncodriveFM genes threshold: 2
+#   OncodriveCLUST genes threshold: 2
+#--------------------------------
+
+```
+
+## 3. ActiveDriver
+
+This is the script to run ActiveDriver.
+
+To run the script, please prepare below input files and reset environment variables in the script.
+
+The input files include the followings:
+
+* all_mutations_for_TCGA_pancancer.tab
+
+* all_phosphosites_for_TCGA_pancancer.tab
+
+* sequences_for_TCGA_pancancer.fa
+
+* sequence_disorder_for_TCGA_pancancer.fa
+
+```{r, message=FALSE, warning=FALSE, eval=FALSE}
+#================================================================
+#================================================================
+# ActiveDriver
+#
+# Here is the link for ActiveDriver:
+# http://reimandlab.org/software/activedriver/
+#================================================================
+#================================================================
+# Clear the environment
+rm(list = ls())
+
+# Load libraries
+library(ActiveDriver)
+
+#---------------------------------------
+# Set environment variables here if any
+# Please remember to create necessary folders
+rootDir <- "C:/Users/phavy022/MyDoc/05CancerDriver"
+outDir <- "C:/Users/phavy022/MyDoc/05CancerDriver/ActiveDriver" # Output folder
+#---------------------------------------
+
+#=======================================
+# Main script
+#=======================================
+
+# # load required datasets
+# muts = read.delim(paste(outDir, "/pancan12_example/mutations.txt", sep = ""))
+# sites = read.delim(paste(outDir, "/pancan12_example/phosphosites.txt", sep = ""))
+# seqs = read_fasta(paste(outDir, "/pancan12_example/sequences.fa", sep = ""))
+# disorder = read_fasta(paste(outDir, "/pancan12_example/sequence_disorder.fa", sep = ""))
+# 
+# # run ActiveDriver
+# psnv_info = ActiveDriver(seqs, disorder, muts, sites)
+# 
+# # save gene-based p-values and merged report as CSV files
+# write.csv(psnv_info$all_gene_based_fdr, paste(outDir, "/pancan12_results_pvals.csv", sep = ""))
+# write.csv(psnv_info$merged_report, paste(outDir, "/pancan12_results_merged.csv", sep = ""))
+# 
+# # look at first few lines of every table in results
+# lapply(psnv_info, head)
+
+# load required datasets
+muts = read.table(paste(outDir, "/pancancer/all_mutations_for_TCGA_pancancer.tab", sep = ""),
+                  sep = "", header=TRUE, stringsAsFactors = FALSE)
+sites = read.table(paste(outDir, "/pancancer/all_phosphosites_for_TCGA_pancancer.tab", sep = ""),
+                   sep = "", header=TRUE, stringsAsFactors = FALSE)
+seqs = read_fasta(paste(outDir, "/pancancer/sequences_for_TCGA_pancancer.fa", sep = ""))
+disorder = read_fasta(paste(outDir, "/pancancer/sequence_disorder_for_TCGA_pancancer.fa", sep = ""))
+
+# Just get BRCA mutations
+muts_brca <- muts[which(grepl("brca", muts$sample_id)),]
+n_row <- nrow(muts_brca)
+for (i in 1:n_row) {
+  muts_brca[i,3] <- strsplit(muts_brca[i,3], split=' ', fixed=TRUE)[[1]][4]
+}
+
+# run ActiveDriver
+psnv_info = ActiveDriver(seqs, disorder, muts_brca, sites)
+
+# save gene-based p-values and merged report as CSV files
+write.csv(psnv_info$all_gene_based_fdr, paste(outDir, "/brca_results_pvals.csv", sep = ""))
+write.csv(psnv_info$merged_report, paste(outDir, "/brca_results_merged.csv", sep = ""))
+
+# look at first few lines of every table in results
+lapply(psnv_info, head)
+```
+
+## 4. DriverNet
+
+This is the script to run DriverNet.
+
+To run the script, please prepare below input files and reset environment variables in the script.
+
+The input files include the followings:
+
+* mut.RData - Mutation data
+
+* FIsInGene_041709.txt - Graph
+
+* BRCA_matchedData_full.RData - Tumour expression data
+
+```{r, message=FALSE, warning=FALSE, eval=FALSE}
+#================================================================
+#================================================================
+# DriverNet
+#
+# Here is the link for DriverNet:
+# https://www.bioconductor.org/packages/release/bioc/html/DriverNet.html
+#================================================================
+#================================================================
+# Clear the environment
+rm(list = ls())
+
+# Load libraries
+library(DriverNet)
+library(igraph)
+library(CancerSubtypes)
+library(data.table)
+
+#---------------------------------------
+# Set environment variables here if any
+# Please remember to create necessary folders
+rootDir <- "C:/Users/phavy022/MyDoc/05CancerDriver"
+outDir <- "C:/Users/phavy022/MyDoc/05CancerDriver/DriverNet" # Output folder
+topk_mR <- 6000 # Number of mRNAs selected for analysis
+#---------------------------------------
+
+# Functions if any
+#=======================================
+#' This function allows you to select mRNAs
+#' which have the most variant Median Absolute Deviation (MAD).
+#' @param matchedData Expression data of mRNAs.
+#' @param topk_mR Number of mRNAs to be cut off.
+#' @return A list containing selected mRNAs. The list of elements includes:
+#' \item{d} {The data with rows being samples and columns being mRNAs.}
+#' \item{mRs} {The names of mRNAs.}
+#=======================================
+getDatabyMAD <- function(matchedData, topk_mR) {
+  # Identify significant mRNAs by using function FSbyMAD in CancerSubtypes package
+  mRNAsData = FSbyMAD(t(matchedData$mRNAs), value=topk_mR)
+  mRNAsData <- t(mRNAsData)
+  
+  # Remove duplicated data
+  mRNAsData <- mRNAsData[,!duplicated(colnames(mRNAsData))]
+  
+  # Prepare the result
+  mRs <- colnames(mRNAsData)
+  l = list(d = mRNAsData, mRs = mRs)
+  
+  return(l)
+}
+
+#=======================================
+# Main script
+#=======================================
+
+# data(samplePatientMutationMatrix)
+# data(samplePatientOutlierMatrix)
+# data(sampleInfluenceGraph)
+# data(sampleGeneNames)
+# # The main function to compute drivers
+# driversList = computeDrivers(samplePatientMutationMatrix,
+#                              samplePatientOutlierMatrix,sampleInfluenceGraph,
+#                              outputFolder=NULL, printToConsole=FALSE)
+# drivers(driversList)[1:10]
+# # random permute the gene labels to compute p-values
+# randomDriversResult = computeRandomizedResult(
+#   patMutMatrix=samplePatientMutationMatrix,
+#   patOutMatrix=samplePatientOutlierMatrix,
+#   influenceGraph=sampleInfluenceGraph,
+#   geneNameList= sampleGeneNames, outputFolder=NULL,
+#   printToConsole=FALSE,numberOfRandomTests=20, weight=FALSE,
+#   purturbGraph=FALSE, purturbData=TRUE)
+# # Summarize the results
+# res = resultSummary(driversList, randomDriversResult,
+#                     samplePatientMutationMatrix,sampleInfluenceGraph,
+#                     outputFolder=NULL, printToConsole=FALSE)
+# res[1:2,]
+# write.csv(res, paste(outDir, "/sampleRes.csv", sep = ""))
+
+# Load the tumor expression data
+load(paste(rootDir, "/Data/BRCA_matchedData_full.RData", sep = ""))
+
+# Get significant mRNAs
+l <- getDatabyMAD(BRCA_matchedData, topk_mR)
+mRNAs <- l$mRs
+n_mRNAs <- length(mRNAs)
+
+# Mutation
+load(paste(rootDir, "/Data/mut.RData", sep = ""))
+inputData <- mut[, c("Hugo_Symbol", "Tumor_Sample_Barcode")]
+patientMutation <- inputData[which(inputData$Hugo_Symbol %in% mRNAs),]
+mRNAs <- unique(patientMutation$Hugo_Symbol)
+n_mRNAs <- length(mRNAs)
+n_sample <- length(unique(patientMutation$Tumor_Sample_Barcode))
+edge_list <- patientMutation
+G <- graph.data.frame(edge_list, directed=FALSE)
+A <- as_adjacency_matrix(G, type="both", names=TRUE, sparse=FALSE)
+mutationMatrix <- A[(n_mRNAs+1):(n_mRNAs+n_sample), 1:n_mRNAs]
+
+# Outlier
+expressionMatrix <- l$d[, which(colnames(l$d) %in% mRNAs)]
+outlierMatrix = getPatientOutlierMatrix(expressionMatrix)
+mRNAs <- colnames(outlierMatrix)
+n_mRNAs <- length(mRNAs)
+
+# Update mutation
+mutationMatrix <- mutationMatrix[, mRNAs]
+
+# Graph
+fi <- fread(paste(outDir, "/FIsInGene_041709.txt", sep = ""), select = c(1:2), header = FALSE)
+fi <- fi[which(fi$V1 %in% mRNAs),]
+fi <- fi[which(fi$V2 %in% mRNAs),]
+edge_list <- fi
+G <- graph.data.frame(edge_list, directed=FALSE)
+A <- as_adjacency_matrix(G, type="both", names=TRUE, sparse=FALSE)
+influenceGraph <- matrix(0, nrow =n_mRNAs, ncol = n_mRNAs)
+colnames(influenceGraph) <- mRNAs
+rownames(influenceGraph) <- mRNAs
+influenceGraph <- merge(influenceGraph, A, by = "row.names", all.x = TRUE)
+rownames(influenceGraph) <- influenceGraph[,1]
+influenceGraph <- influenceGraph[,-1]
+influenceGraph <- influenceGraph[, which(!grepl(".x", colnames(influenceGraph)))]
+colnames(influenceGraph) <- gsub(".y", "", colnames(influenceGraph))
+influenceGraph[is.na(influenceGraph)] <- 0
+influenceGraph <- influenceGraph[mRNAs,]
+influenceGraph <- influenceGraph[,mRNAs]
+for (i in 1:n_mRNAs) {
+  influenceGraph[i,i] <- 1
+}
+influenceGraph <- as.matrix(influenceGraph)
+
+# Gene names
+data(sampleGeneNames)
+
+# Update mutation & outlier
+rownames(mutationMatrix) <- substr(rownames(mutationMatrix), 1, 12)
+com <- intersect(rownames(mutationMatrix), rownames(outlierMatrix))
+mutationMatrix <- mutationMatrix[com,]
+outlierMatrix <- rbind(outlierMatrix[com,],
+                       outlierMatrix[which(!(rownames(outlierMatrix) %in% com)),])
+
+# The main function to compute drivers
+driversList = computeDrivers(mutationMatrix,
+                             outlierMatrix, influenceGraph,
+                             outputFolder=NULL, printToConsole=FALSE)
+drivers(driversList)[1:10]
+
+# random permute the gene labels to compute p-values
+randomDriversResult = computeRandomizedResult(
+  patMutMatrix=mutationMatrix,
+  patOutMatrix=outlierMatrix,
+  influenceGraph=influenceGraph,
+  geneNameList= sampleGeneNames, outputFolder=NULL,
+  printToConsole=FALSE,numberOfRandomTests=20, weight=FALSE,
+  purturbGraph=FALSE, purturbData=TRUE)
+
+# Summarize the results
+res = resultSummary(driversList, randomDriversResult,
+                    mutationMatrix, influenceGraph,
+                    outputFolder=NULL, printToConsole=FALSE)
+res[1:2,]
+write.csv(res, paste(outDir, "/res.csv", sep = ""))
+
 ```
