@@ -28,31 +28,114 @@ convertmiRs <- function(miRs) {
 }
 
 #================================================================
+#' miRNA target prediction with the Pearson correlation coefficient method, returning p-value
+#' Calculate the Pearson correlation coefficient of each pair of miRNA-mRNA,and return a matrix of p-value of correlation coefficients with columns are miRNAs and rows are mRNAs.
+#' 
+#' @param datacsv the input dataset in csv format
+#' @param cause the column range that specifies the causes (miRNAs), e.g. 1:35
+#' @param effect the column range that specifies the effects (mRNAs), e.g. 36:2000
+#' @return A  matrix that includes the p-value of Pearson correlation coefficients. Columns are miRNAs, rows are mRNAs.
+#' 
+#' @references
+#' Pearson, K. (1920) Notes on the history of correlation. Biometrika, 13, 25 - 45.
+#================================================================
+Pearson_pValue=function(datacsv, cause, effect){
+  data=Read(datacsv)
+  data=scale(data) #standardise the data
+  
+  header<-readHeader(datacsv)
+  num_miRNA<-length(cause)
+  num_mRNA<-length(effect)
+  miR<-header[1:num_miRNA]
+  mR<-header[-(1:num_miRNA)]
+  
+  miRNA=data[,cause]
+  mRNA=data[,effect]
+  
+  r <- matrix(data = NA, nrow = num_mRNA, ncol = num_miRNA)
+  row.names(r) <- mR
+  colnames(r) <- miR
+  for (i in 1:num_mRNA) {
+    for (j in 1:num_miRNA) {
+      r[i,j] <- cor.test(mRNA[,i], miRNA[,j], method="pearson")$p.value
+    }
+  }
+  
+  return(r)
+}
+
+#================================================================
+#' Adjust p-values
+#================================================================
+adjustpValues = function(results) {
+  
+  r <- results
+  
+  nR <- nrow(r)
+  nC <- ncol(r)
+  t <- as.vector(r)
+  t <- p.adjust(t, method="fdr")
+  r <- matrix(t, nrow = nR, ncol = nC)
+  
+  row.names(r) <- row.names(results)
+  colnames(r) <- colnames(results)
+  
+  return(r)
+}
+
+#================================================================
 #' Identify links among nodes from their expression data
 #' @param data Expression data with rows being samples and columns being biological features
 #' @param cause Range of cause
 #' @param effect Range of effect
 #' @param rootDir Root folder
+#' @param f File name
+#' @param usingpVal TRUE if using p-value
+#' @param cutoff FDR cutoff
 #' @return Edges from cause to effect
 #================================================================
-identifyEdges = function(data, cause, effect, rootDir) {
-  # Use Pearson to evaluate the relationship among cause and effect
-  dataset <- paste(rootDir, "/Data/Output/dataset.csv", sep = "")
-  write.csv(data[, c(cause, effect)], dataset, row.names = FALSE)
-  results = Pearson(dataset, 1:length(cause), (length(cause)+1):(length(cause)+length(effect)))
-  results <- t(results)
+identifyEdges = function(data, cause, effect, rootDir, f = "temp", usingpVal = FALSE, cutoff = 0.05) {
   
-  # Get links which have the absolute coefficients more than
-  # the average of all absolute coefficients
-  a <- mean(abs(results))
-  results <- abs(results) >= a
-  ind <- which(results, arr.ind=TRUE)
-  edges <- ind
-  edges[, 1] <- row.names(ind)
-  edges[, 2] <- colnames(results)[ind[, 2]]
-  
-  # Remove dataset.csv file
-  file.remove(paste(rootDir, "/Data/Output/dataset.csv", sep = ""))
+  if(usingpVal == TRUE) {
+    # Use Pearson to evaluate the relationship among cause and effect
+    dataset <- paste(rootDir, "/Data/Output/dataset.csv", sep = "")
+    write.csv(data[, c(cause, effect)], dataset, row.names = FALSE)
+    results = Pearson_pValue(dataset, 1:length(cause), (length(cause)+1):(length(cause)+length(effect)))
+    results <- t(results)
+    
+    # Get links which have p-value < cutoff
+    results <- adjustpValues(results)
+    results <- results < cutoff
+    ind <- which(results, arr.ind=TRUE)
+    edges <- ind
+    edges[, 1] <- row.names(ind)
+    edges[, 2] <- colnames(results)[ind[, 2]]
+    
+    # Remove dataset.csv file
+    file.remove(paste(rootDir, "/Data/Output/dataset.csv", sep = ""))
+  } else {
+    # Use Pearson to evaluate the relationship among cause and effect
+    dataset <- paste(rootDir, "/Data/Output/dataset.csv", sep = "")
+    write.csv(data[, c(cause, effect)], dataset, row.names = FALSE)
+    results = Pearson(dataset, 1:length(cause), (length(cause)+1):(length(cause)+length(effect)))
+    results <- t(results)
+    
+    # Write file
+    t <- paste(rootDir, "/Data/Output/CancerDriver/Cancer/Network/", f, ".csv", sep = "")
+    write.csv(results, t, row.names = TRUE)
+    
+    # Get links which have the absolute coefficients more than
+    # the average of all absolute coefficients
+    a <- mean(abs(results))
+    results <- abs(results) >= a
+    ind <- which(results, arr.ind=TRUE)
+    edges <- ind
+    edges[, 1] <- row.names(ind)
+    edges[, 2] <- colnames(results)[ind[, 2]]
+    
+    # Remove dataset.csv file
+    file.remove(paste(rootDir, "/Data/Output/dataset.csv", sep = ""))
+  }
   
   return(edges)
 }
@@ -66,29 +149,32 @@ identifyEdges = function(data, cause, effect, rootDir) {
 #' @param data Expression data with rows being samples and 
 #'    columns being biological features with the order miRNAs, mRNAs, TFs
 #' @param rootDir Root folder
+#' @param usingpVal TRUE if using p-value
+#' @param cutoff FDR cutoff
 #' @return Edges of the network from cause to effect
 #================================================================
-buildNetworkWithmiRs = function(interactions, nomiR, nomR, noTF, data, rootDir){
+buildNetworkWithmiRs = function(interactions, nomiR, nomR, noTF, data, rootDir, usingpVal = FALSE, cutoff = 0.05){
+  
   # Build network
   # miRNA => TF
-  edges_non_cod <- identifyEdges(data, 1:nomiR, (nomiR+nomR+1):(nomiR + nomR + noTF), rootDir)
+  edges_non_cod <- identifyEdges(data, 1:nomiR, (nomiR+nomR+1):(nomiR + nomR + noTF), rootDir, "miRNATF", usingpVal, cutoff)
   # miRNA => mRNA
   edges_non_cod <- rbind(edges_non_cod,
-                         identifyEdges(data, 1:nomiR, (nomiR+1):(nomiR + nomR), rootDir))
+                         identifyEdges(data, 1:nomiR, (nomiR+1):(nomiR + nomR), rootDir, "miRNAmRNA", usingpVal, cutoff))
   edges_non_cod[, 1] <- gsub("\\.", "-", edges_non_cod[, 1])
   # TF => miRNA
-  edges_cod_non <- identifyEdges(data, (nomiR+nomR+1):(nomiR + nomR + noTF), 1:nomiR, rootDir)
+  edges_cod_non <- identifyEdges(data, (nomiR+nomR+1):(nomiR + nomR + noTF), 1:nomiR, rootDir, "TFmiRNA", usingpVal, cutoff)
   edges_cod_non[, 2] <- gsub("\\.", "-", edges_cod_non[, 2])
   # TF => mRNA
   edges_cod_cod <- identifyEdges(data, (nomiR+nomR+1):(nomiR + nomR + noTF),
-                                 (nomiR+1):(nomiR + nomR), rootDir)
+                                 (nomiR+1):(nomiR + nomR), rootDir, "TFmRNA", usingpVal, cutoff)
   # mRNA => mRNA
-  temp <- identifyEdges(data, (nomiR+1):(nomiR + nomR), (nomiR+1):(nomiR + nomR), rootDir)
+  temp <- identifyEdges(data, (nomiR+1):(nomiR + nomR), (nomiR+1):(nomiR + nomR), rootDir, "mRNAmRNA", usingpVal, cutoff)
   temp[, 2] <- gsub("\\..*","",temp[, 2])
   edges_cod_cod <- rbind(edges_cod_cod, temp)
   # TF => TF
   temp <- identifyEdges(data, (nomiR+nomR+1):(nomiR + nomR + noTF),
-                        (nomiR+nomR+1):(nomiR + nomR + noTF), rootDir)
+                        (nomiR+nomR+1):(nomiR + nomR + noTF), rootDir, "TFTF", usingpVal, cutoff)
   temp[, 2] <- gsub("\\..*","",temp[, 2])
   edges_cod_cod <- rbind(edges_cod_cod, temp)
   # Set colnames
@@ -349,6 +435,20 @@ printGeneList_6methods = function(OncodriveCLUST, ActiveDriver, OncodriveFM,
   print(getList(DawnRank))
   print("CBNA")
   print(getList(CBNA))  
+}
+
+#================================================================
+#' Print gene lists for finding overlaps among methods
+#================================================================
+printGeneList_4methods = function(net, DawnRankDriver, NetSig, CBNA) {
+  print("DriverNet")
+  print(getList(net))
+  print("DawnRank")
+  print(getList(DawnRankDriver))
+  print("NetSig")
+  print(getList(NetSig))
+  print("CBNA")
+  print(getList(CBNA))
 }
 
 #================================================================
@@ -634,6 +734,72 @@ drawLineChart6=function(OncodriveCLUSTData, ActiveDriverData, OncodriveFMData, D
 }
 
 #================================================================
+#' This function allows you to draw a line chart
+#================================================================
+drawLineChart7=function(OncodriveCLUSTData, ActiveDriverData, OncodriveFMData, DriverNetData, DawnRankData, NetSigData, CBNAData, Type="Precision"){
+  # Parameters for each chart type
+  if(Type == "Precision") {
+    yText <- "Precision according to CGC"
+    t <- "Precision Comparison"
+    pos <- "topright"
+  } else if (Type == "Recall") {
+    yText <- "Recall according to CGC"
+    t <- "Recall Comparison"
+    pos <- "topleft"
+  } else { # "F1Score"
+    yText <- "F1 Score according to CGC"
+    t <- "F1 Score Comparison"
+    pos <- "topleft"
+  }
+  
+  # Prepare data
+  Method=c(rep("OncodriveCLUST", 200), rep("ActiveDriver", 200), rep("OncodriveFM", 200), rep("DriverNet", 200), rep("DawnRank", 200), rep("NetSig", 200), rep("CBNA", 200))
+  TopNGenes=c(1:200, 1:200, 1:200, 1:200, 1:200, 1:200, 1:200)
+  Val=c(OncodriveCLUSTData, ActiveDriverData, OncodriveFMData, DriverNetData, DawnRankData, NetSigData, CBNAData)
+  indexes<-seq(5,1400,5)
+  Method <- Method[indexes]
+  TopNGenes <- TopNGenes[indexes]
+  Val <- Val[indexes]
+  data <- list(Method=Method,
+               TopNGenes=TopNGenes,
+               Val=Val)
+  
+  # Convert to numeric for convenience 
+  data$Val <- as.numeric(data$Val)
+  
+  # Prepare some constants
+  methodList <- c("OncodriveCLUST", "ActiveDriver", "OncodriveFM", "DriverNet", "DawnRank", "NetSig", "CBNA")
+  nMethods <- length(methodList)
+  
+  # Get the range for the x and y axis 
+  xrange <- range(data$TopNGenes) 
+  yrange <- range(data$Val) 
+  
+  # Set up the plot 
+  plot(xrange, yrange, type="n", xlab="Top N genes",
+       ylab="", cex.lab=2, cex.axis=2)
+  title(ylab=yText, line=2.7, cex.lab=2)
+  colors <- rainbow(nMethods) 
+  linetype <- c(1:nMethods) 
+  plotchar <- seq(18, 18+nMethods, 1)
+  
+  # Add lines 
+  for (i in 1:nMethods) {
+    ind <- which(data$Method == methodList[i])
+    method <- list(Method=data$Method[ind], TopNGenes=data$TopNGenes[ind], Val=data$Val[ind])
+    lines(method$TopNGenes, method$Val, type="b", lwd=1.5,
+          lty=linetype[i], col=colors[i], pch=plotchar[i], cex=2) 
+  } 
+  
+  # Add a title 
+  title(t, cex.main=2.5)
+  
+  # Add a legend 
+  legend(pos, inset = 0.02, legend=methodList, cex=2, col=colors,
+         pch=plotchar, lty=linetype, title="Method", bty = "n")
+}
+
+#================================================================
 #' This function allows you to prepare data for a clustergram
 #' @param dat the data to draw.
 #' @param termTop the number of top terms to draw.
@@ -729,6 +895,32 @@ readResult = function(resultDir, type) {
 }
 
 #================================================================
+#' This function allows you to read results of exploring drivers for cancer subtypes
+#================================================================
+readResult02 = function(resultDir, type) {
+  # Get the folder name
+  outDir <- paste(resultDir, "/", type, sep = "")
+  
+  # Coding with mutations
+  coding_mutations = read.csv(
+    file = paste(outDir, "/pVal_coding_candidate_cancer_drivers_mutations.csv", sep = ""), as.is = TRUE)
+  
+  # Coding without mutations
+  coding_no_mutations = read.csv(
+    file = paste(outDir, "/pVal_coding_candidate_cancer_drivers_no_mutations.csv", sep = ""), as.is = TRUE)
+  
+  # Noncoding
+  noncoding = read.csv(
+    file = paste(outDir, "/pVal_noncoding_candidate_cancer_drivers.csv", sep = ""), as.is = TRUE)
+  
+  # Combine
+  all <- rbind(coding_mutations, coding_no_mutations, noncoding)
+  l = list(subType = type, coding_mutations = coding_mutations, coding_no_mutations = coding_no_mutations, noncoding = noncoding, all = all)
+  
+  return(l)
+}
+
+#================================================================
 #' This function allows you to get drivers which are specific for a subtype
 #' @param basalList Basal drivers.
 #' @param her2List Her2 drivers.
@@ -809,4 +1001,53 @@ processmiR=function(noncoding_gold_standard_Mes) {
   }
   
   return(miRs)
+}
+
+#================================================================
+#' Calulate probability of degrees
+#================================================================
+calPro=function(g, cum, mod, typ, nodetype) {
+  ver <- nodetype[which(nodetype$TypeI == typ),1]
+  ver <- as.character(ver)
+  
+  dd <- degree.distribution(g, cumulative = cum, mode = mod, v = ver)
+  probability <- dd[-1]
+  nonzero.position = which(probability != 0)
+  probability = probability[nonzero.position]
+  
+  d <- degree(g, mode=mod, v = ver)
+  degree <- 1:max(d)
+  degree = degree[nonzero.position]
+  
+  r <- list(pro=probability, deg=degree)
+  return(r)
+}
+
+#================================================================
+#' Get drivers for breast cancer
+#================================================================
+getBreastDrivers=function(gold_standard) {
+  
+  r <- NULL
+  n <- nrow(gold_standard)
+  for (i in 1:n) {
+    flag <- FALSE
+    if(grepl("breast", as.character(gold_standard[i,2]))) {
+      flag <- TRUE
+    }
+    if(grepl("breast", as.character(gold_standard[i,10]))) {
+      flag <- TRUE
+    }
+    if(grepl("breast", as.character(gold_standard[i,11]))) {
+      flag <- TRUE
+    }
+    if(grepl("breast", as.character(gold_standard[i,12]))) {
+      flag <- TRUE
+    }
+    if(flag) {
+      r <- rbind(r, gold_standard[i,])
+    }
+  }
+  
+  return(r)
 }
