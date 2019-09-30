@@ -11,9 +11,8 @@ This repository includes the scripts and data of the proposed method.
 The scripts are in the Script folder and include:
     (1) ProposedMethod_Functions.R - Developed functions used for our method
     (2) ProposedMethod_v20.Rmd - Main script for the method
-    (3) ProposedMethod_v20.pdf - Main script for the method in pdf
+    (3) ProposedMethod_v20.html - Main script for the method in html
     (4) OtherMethods.Rmd - The script for other methods which are compared to the proposed method
-
     (5) OtherMethods.pdf - The script in pdf for other methods which are compared to the proposed method
     
 The data are in the Data folder and include:
