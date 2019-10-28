@@ -764,6 +764,14 @@ colnames(mutData) <- c("symbol", "Sample", "ct")
 # https://sagebionetworks.jira.com/wiki/spaces/METAGENOMICS/pages/23396441/Curation+of+Mutation+Data
 proteinAffectingMut <- mutData[!(mutData$ct %in% c("silent", "rna")),]
 proteinAffectingMut$Sample <- substr(proteinAffectingMut$Sample, 1, 12)
+#-------------------------
+# Check the subtype of mutations
+result_subtypes <- read.table(paste(rootDir, "/Data/outputFile_pam50scores.txt", sep = ""), as.is = TRUE)
+result_subtypes[1,1] <- "Sample"
+colnames(result_subtypes) <- result_subtypes[1,]
+result_subtypes <- result_subtypes[-1,]
+mutation_subtypes <- merge(x = proteinAffectingMut, y = result_subtypes, by = "Sample", all.x = TRUE)
+#-------------------------
 # Evaluate the frequency for each mutated gene
 proteinAffectingMut$weight <- 0
 proteinAffectingMut <- proteinAffectingMut[order(proteinAffectingMut$symbol),]
@@ -850,6 +858,37 @@ write.csv(coding_candidate_cancer_drivers_no_mutations,
           row.names = FALSE)
 write.csv(noncoding_candidate_cancer_drivers,
           paste(outDir, "/pVal_noncoding_candidate_cancer_drivers.csv", sep = ""), row.names = FALSE)
+
+#-------------------------
+# Update coding cancer drivers with mutations by checking subtypes of mutations
+coding_candidate_cancer_drivers_mutations <- read.csv(
+  paste(outDir, "/pVal_coding_candidate_cancer_drivers_mutations.csv", sep = ""), as.is = TRUE)
+coding_candidate_cancer_drivers_mutations$Subtype <- ""
+l <- nrow(coding_candidate_cancer_drivers_mutations)
+LumA <- "LumA"
+LumB <- "LumB"
+Basal <- "Basal"
+Her2 <- "Her2"
+Normal <- "Normal"
+type_list <- c(LumA, LumB, Basal, Her2, Normal)
+for (i in 1:l) {
+  gene <- coding_candidate_cancer_drivers_mutations$Name[i]
+  temp <- mutation_subtypes[which(mutation_subtypes$symbol == gene),]
+  n_LumA <- nrow(temp[which(temp$Call==LumA),])
+  n_LumB <- nrow(temp[which(temp$Call==LumB),])
+  n_Basal <- nrow(temp[which(temp$Call==Basal),])
+  n_Her2 <- nrow(temp[which(temp$Call==Her2),])
+  n_Normal <- nrow(temp[which(temp$Call==Normal),])
+  t <- c(n_LumA, n_LumB, n_Basal, n_Her2, n_Normal)
+  ind_max <- which.max(t)
+  coding_candidate_cancer_drivers_mutations$Subtype[i] <- type_list[ind_max]
+}
+coding_candidate_cancer_drivers_mutations <- coding_candidate_cancer_drivers_mutations[which(
+  coding_candidate_cancer_drivers_mutations$Subtype == type),]
+write.csv(coding_candidate_cancer_drivers_mutations[,-9],
+          paste(outDir, "/pVal_coding_candidate_cancer_drivers_mutations.csv", sep = ""),
+          row.names = FALSE)
+#-------------------------
 
 ```
 

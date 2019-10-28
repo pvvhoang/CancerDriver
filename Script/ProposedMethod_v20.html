@@ -896,6 +896,14 @@ colnames(mutData) &lt;- c(&quot;symbol&quot;, &quot;Sample&quot;, &quot;ct&quot;
 # https://sagebionetworks.jira.com/wiki/spaces/METAGENOMICS/pages/23396441/Curation+of+Mutation+Data
 proteinAffectingMut &lt;- mutData[!(mutData$ct %in% c(&quot;silent&quot;, &quot;rna&quot;)),]
 proteinAffectingMut$Sample &lt;- substr(proteinAffectingMut$Sample, 1, 12)
+#-------------------------
+# Check the subtype of mutations
+result_subtypes &lt;- read.table(paste(rootDir, &quot;/Data/outputFile_pam50scores.txt&quot;, sep = &quot;&quot;), as.is = TRUE)
+result_subtypes[1,1] &lt;- &quot;Sample&quot;
+colnames(result_subtypes) &lt;- result_subtypes[1,]
+result_subtypes &lt;- result_subtypes[-1,]
+mutation_subtypes &lt;- merge(x = proteinAffectingMut, y = result_subtypes, by = &quot;Sample&quot;, all.x = TRUE)
+#-------------------------
 # Evaluate the frequency for each mutated gene
 proteinAffectingMut$weight &lt;- 0
 proteinAffectingMut &lt;- proteinAffectingMut[order(proteinAffectingMut$symbol),]
@@ -981,7 +989,38 @@ write.csv(coding_candidate_cancer_drivers_no_mutations,
           paste(outDir, &quot;/pVal_coding_candidate_cancer_drivers_no_mutations.csv&quot;, sep = &quot;&quot;),
           row.names = FALSE)
 write.csv(noncoding_candidate_cancer_drivers,
-          paste(outDir, &quot;/pVal_noncoding_candidate_cancer_drivers.csv&quot;, sep = &quot;&quot;), row.names = FALSE)</code></pre>
+          paste(outDir, &quot;/pVal_noncoding_candidate_cancer_drivers.csv&quot;, sep = &quot;&quot;), row.names = FALSE)
+
+#-------------------------
+# Update coding cancer drivers with mutations by checking subtypes of mutations
+coding_candidate_cancer_drivers_mutations &lt;- read.csv(
+  paste(outDir, &quot;/pVal_coding_candidate_cancer_drivers_mutations.csv&quot;, sep = &quot;&quot;), as.is = TRUE)
+coding_candidate_cancer_drivers_mutations$Subtype &lt;- &quot;&quot;
+l &lt;- nrow(coding_candidate_cancer_drivers_mutations)
+LumA &lt;- &quot;LumA&quot;
+LumB &lt;- &quot;LumB&quot;
+Basal &lt;- &quot;Basal&quot;
+Her2 &lt;- &quot;Her2&quot;
+Normal &lt;- &quot;Normal&quot;
+type_list &lt;- c(LumA, LumB, Basal, Her2, Normal)
+for (i in 1:l) {
+  gene &lt;- coding_candidate_cancer_drivers_mutations$Name[i]
+  temp &lt;- mutation_subtypes[which(mutation_subtypes$symbol == gene),]
+  n_LumA &lt;- nrow(temp[which(temp$Call==LumA),])
+  n_LumB &lt;- nrow(temp[which(temp$Call==LumB),])
+  n_Basal &lt;- nrow(temp[which(temp$Call==Basal),])
+  n_Her2 &lt;- nrow(temp[which(temp$Call==Her2),])
+  n_Normal &lt;- nrow(temp[which(temp$Call==Normal),])
+  t &lt;- c(n_LumA, n_LumB, n_Basal, n_Her2, n_Normal)
+  ind_max &lt;- which.max(t)
+  coding_candidate_cancer_drivers_mutations$Subtype[i] &lt;- type_list[ind_max]
+}
+coding_candidate_cancer_drivers_mutations &lt;- coding_candidate_cancer_drivers_mutations[which(
+  coding_candidate_cancer_drivers_mutations$Subtype == type),]
+write.csv(coding_candidate_cancer_drivers_mutations[,-9],
+          paste(outDir, &quot;/pVal_coding_candidate_cancer_drivers_mutations.csv&quot;, sep = &quot;&quot;),
+          row.names = FALSE)
+#-------------------------</code></pre>
 </div>
 <div id="detecting-drivers-of-epithelial-mesenchymal-transition-emt" class="section level2">
 <h2>4. Detecting drivers of epithelial-mesenchymal transition (EMT)</h2>
