@@ -1,1 +1,1 @@
-*.perl linguist-detectable=false
+*.pl linguist-detectable=false
